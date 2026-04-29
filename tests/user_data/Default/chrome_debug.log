@@ -1,0 +1,113 @@
+[0426/111523.861:INFO:CONSOLE:182] "[Meta Pixel] - Unable to parse JSON-LD tag. Malformed JSON found: '
+        {
+        "@context": "http://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": 
+        [
+            {
+                "@type": "ListItem",
+                "position": 1,
+                "item": 
+                {
+                  "@id": "https://teelab.vn",
+                  "name": "Trang chủ"
+                }
+            },
+      
+        
+      
+      
+      
+      
+    
+        ]
+        }
+			'.", source: https://connect.facebook.net/en_US/fbevents.js (182)
+[0426/111524.028:INFO:CONSOLE:0] "Pattern attribute value [a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,63}$ is not a valid regular expression: Uncaught SyntaxError: Invalid regular expression: /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,63}$/v: Invalid character in character class", source: https://teelab.vn/account/login?ReturnUrl=%2Faccount (0)
+[0426/111524.634:INFO:CONSOLE:182] "[Meta Pixel] - Unable to parse JSON-LD tag. Malformed JSON found: '
+        {
+        "@context": "http://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": 
+        [
+            {
+                "@type": "ListItem",
+                "position": 1,
+                "item": 
+                {
+                  "@id": "https://teelab.vn",
+                  "name": "Trang chủ"
+                }
+            },
+      
+        
+      
+      
+      
+      
+    
+        ]
+        }
+			'.", source: https://connect.facebook.net/en_US/fbevents.js (182)
+[0426/111527.767:INFO:CONSOLE:0] "The resource https://bizweb.dktcdn.net/100/575/016/themes/1111006/assets/404page.scss.css?1776511208841 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally.", source: https://teelab.vn/account (0)
+[0426/111527.768:INFO:CONSOLE:0] "The resource https://bizweb.dktcdn.net/100/575/016/themes/1111006/assets/quickviews_popup_cart.scss.css?1776511208841 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally.", source: https://teelab.vn/account (0)
+[0426/111527.768:INFO:CONSOLE:0] "The resource https://bizweb.dktcdn.net/100/575/016/themes/1111006/assets/index.scss.css?1776511208841 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally.", source: https://teelab.vn/account (0)
+[0426/111532.646:INFO:CONSOLE:0] "The resource https://bizweb.dktcdn.net/100/575/016/themes/1111006/assets/404page.scss.css?1776511208841 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally.", source: https://teelab.vn/account (0)
+[0426/111532.646:INFO:CONSOLE:0] "The resource https://bizweb.dktcdn.net/100/575/016/themes/1111006/assets/quickviews_popup_cart.scss.css?1776511208841 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally.", source: https://teelab.vn/account (0)
+[0426/111532.646:INFO:CONSOLE:0] "The resource https://bizweb.dktcdn.net/100/575/016/themes/1111006/assets/index.scss.css?1776511208841 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally.", source: https://teelab.vn/account (0)
+[0426/111555.256:INFO:CONSOLE:182] "[Meta Pixel] - Unable to parse JSON-LD tag. Malformed JSON found: '
+        {
+        "@context": "http://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": 
+        [
+            {
+                "@type": "ListItem",
+                "position": 1,
+                "item": 
+                {
+                  "@id": "https://teelab.vn",
+                  "name": "Trang chủ"
+                }
+            },
+      
+        
+      
+      
+      
+      
+    
+        ]
+        }
+			'.", source: https://connect.facebook.net/en_US/fbevents.js (182)
+[0426/111558.362:INFO:CONSOLE:0] "The resource https://bizweb.dktcdn.net/100/575/016/themes/1111006/assets/404page.scss.css?1776511208841 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally.", source: https://teelab.vn/account (0)
+[0426/111558.362:INFO:CONSOLE:0] "The resource https://bizweb.dktcdn.net/100/575/016/themes/1111006/assets/quickviews_popup_cart.scss.css?1776511208841 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally.", source: https://teelab.vn/account (0)
+[0426/111558.362:INFO:CONSOLE:0] "The resource https://bizweb.dktcdn.net/100/575/016/themes/1111006/assets/index.scss.css?1776511208841 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally.", source: https://teelab.vn/account (0)
+[0426/111603.317:INFO:CONSOLE:0] "The resource https://bizweb.dktcdn.net/100/575/016/themes/1111006/assets/404page.scss.css?1776511208841 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally.", source: https://teelab.vn/account (0)
+[0426/111603.318:INFO:CONSOLE:0] "The resource https://bizweb.dktcdn.net/100/575/016/themes/1111006/assets/quickviews_popup_cart.scss.css?1776511208841 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally.", source: https://teelab.vn/account (0)
+[0426/111603.318:INFO:CONSOLE:0] "The resource https://bizweb.dktcdn.net/100/575/016/themes/1111006/assets/index.scss.css?1776511208841 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally.", source: https://teelab.vn/account (0)
+[0426/111625.851:INFO:CONSOLE:182] "[Meta Pixel] - Unable to parse JSON-LD tag. Malformed JSON found: '
+        {
+        "@context": "http://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": 
+        [
+            {
+                "@type": "ListItem",
+                "position": 1,
+                "item": 
+                {
+                  "@id": "https://teelab.vn",
+                  "name": "Trang chủ"
+                }
+            },
+      
+        
+      
+      
+      
+      
+    
+        ]
+        }
+			'.", source: https://connect.facebook.net/en_US/fbevents.js (182)

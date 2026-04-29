@@ -1,0 +1,11 @@
+streamlit
+pandas
+selenium
+playwright
+pytest
+python-dotenv
+openai
+openpyxl
+webdriver-manager
+allure-pytest
+pytest-html

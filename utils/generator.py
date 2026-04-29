@@ -1,93 +1,149 @@
 import os
 import re
 
-def build_prompt_all(testcases, url):
-    content = ""
 
+def build_prompt_all(testcases, url, framework):
+    first_feature = testcases[0]["id"].lower()
+    first_feature = first_feature.replace("[", "").replace("]", "").split("-")[0]
+
+    content = ""
     for tc in testcases:
         content += f"""
 ID: {tc['id']}
-Steps:
+STEPS:
 {tc['steps']}
-Expected: "{tc['expected']}"
+EXPECTED: {tc['expected']}
 """
 
     return f"""
-You are an automation tester.
+You are a QA Automation Engineer.
 
 URL: {url}
-
-TEST CASE:
+TEST CASES:
 {content}
 
-====================
-GOAL
-====================
-Generate automation test using Pytest + Selenium (data-driven).
+TASK:
+Generate Pytest automation using {framework} (data-driven)
+OUTPUT (STRICT):
+###FILE:pages/{first_feature}_page.py
+###FILE:tests/test_{first_feature}.py
 
-Output EXACTLY 2 files:
-###FILE:data_test/data_<feature>.py
-###FILE:tests/test_<feature>.py
+FRAMEWORK:
 
-<feature> = from first test case ID (lowercase, remove [], remove -1)
+- If framework == "selenium":
+    + Use selenium.webdriver
+    + Use WebDriverWait and expected_conditions
+    + Use webdriver-manager
+    + Use driver.find_element
 
-====================
-RULES
-====================
+- If framework == "playwright":
+    + Use playwright.sync_api
+    + Use page.locator()
+    + Use page.fill(), page.click()
+    + Use page.text_content()
+    + Use sync_playwright
+    + DO NOT use Selenium APIs
+
+RULES:
 
 1. DATA:
 - test_data = [(input1, input2, ..., expected)]
+- ids = [test case IDs]
+- Inputs are SINGLE values (NOT list)
 
-2. STEP PARSING:
-- Enter "x" → input value
-- Clear → empty input
-- Click → click()
-- Press Enter → send_keys(Keys.ENTER)
-- Open search → click search icon
+2. STRUCTURE:
+- One Page class only
+- Methods: __init__, perform_actions, get_result
+- No extra methods
+- Page class must use self.driver (selenium) OR self.page (playwright)
+- DO NOT pass driver/page into methods
 
 3. LOCATOR:
-- Locator is defined ONLY in first test case
-- Reuse locator for all other test cases
-- [id=] → By.ID
-- [name=] → By.NAME
-- [xpath=] → By.XPATH
-- [css=] → By.CSS_SELECTOR
+- Define locators in __init__
+- Since HTML is not provided, you MUST infer locators based on TEST CASES (e.g., field names, button texts, standard web patterns).
+- Use dynamic locators (e.g., XPath by visible text, name attributes, placeholders).
+- Priority: visible text > placeholder > name > generic css/xpath
+- For notifications, rely on the Multi-layered Notification Detection Engine rather than specific locators.
 
-4. PAGE:
-class Page:
-    def __init__(self, driver):
-        self.driver = driver
+4. ACTION
+- Steps must follow TEST CASES strictly
+- Input:
+    If selenium:
+        use visibility_of_element_located
+        clear() + send_keys(value)
 
-def perform_actions(self, inputs):
-    # use index mapping
+    If playwright:
+        use page.locator(...).fill(value)
+- Click:
+    If selenium:
+        - Button/input → element.click()
+        - Icon/img: use JS click
 
-def get_result(self, expected):
-    - ưu tiên lấy text từ *_locator
-    - fallback: validationMessage
+    If playwright:
+        - Button/input → locator.click()
 
-5. TEST:
-@pytest.mark.parametrize("data", test_data)
-def test_auto(data):
-    driver = webdriver.Chrome()
-    driver.get("{url}")
-    inputs = data[:-1]
-    expected = data[-1]
+        - Icon/img:
+            find clickable parent (e.g., <a>, <button>)
+            click parent if exists
 
-    page = Page(driver)
-    page.perform_actions(inputs)
-    actual = page.get_result(expected)
+            if cannot click or element is hidden:
+                use locator.evaluate("el => el.click()")
 
-    assert actual.strip() == expected.strip()
-    driver.quit()
+            if element has hidden class (e.g., d-none):
+                remove it using evaluate before click
 
-====================
-IMPORTANT
-====================
-- Do NOT create extra locator
-- Do NOT hardcode text
-- Output ONLY code
-- MUST have exactly 2 files with ###FILE
+5. WAIT
+- If selenium:
+    use WebDriverWait
+
+- If playwright:
+    use auto-wait (DO NOT use WebDriverWait)
+
+6. RESULT (IMPORTANT):
+- get_result() returns final result
+- If expected is empty: return current URL
+- If expected is not empty, you MUST INFER the correct notification type based on the expected message and ONLY generate code for the relevant detection layers. Do NOT generate redundant code. Ensure the generated logic is universally applicable across all features and web pages.
+  * Inference Rules:
+    + If expected message indicates missing/empty input → Use inline validation logic (Layer 4).
+    + If expected message indicates format/length validation → Use inline validation or HTML5 logic (Layer 4 or Layer 5).
+    + If expected message indicates a business logic error (e.g., wrong password, login failed) → Use toast/snackbar logic (Layer 2) and optionally Layer 1/3 if needed.
+    + If expected message indicates a success message → Use toast/snackbar logic (Layer 2) or check URL redirect.
+  * Detection Layers Reference (Implement ONLY what is inferred above):
+    + Layer 1 (Native Alerts): Handle browser alerts/dialogs (Selenium: WebDriverWait for alert / Playwright: dialog event listener).
+    + Layer 2 (Toasts/Snackbars): Target transient elements using structural heuristics (role='alert', 'status' OR class containing 'toast', 'snackbar', 'notification', 'alert', 'message'). Use short wait times (1-3s) to quickly capture fast-disappearing toast messages before they vanish.
+    + Layer 3 (Modals/Popups): Target dialog bodies (class containing 'modal-body', 'popup-content', 'dialog').
+    + Layer 4 (DOM Pattern): Identify visible inline error/success messages based on DOM pattern recognition. Capture validation error messages if error locators are found in the HTML (e.g., .text-danger, .error, .invalid-feedback).
+    + Layer 5 (JS Runtime Analysis): Extract HTML5 input validationMessage (element.validationMessage) if input is invalid and no visible error exists.
+- Use try-except blocks (Selenium) or error-handling (Playwright) when checking for locators in the HTML to catch exceptions and prevent script crashes.
+- Return the text content of the detected notification.
+- Do not use the expected value in the detection logic.
+- Do not fallback to URL when expected is not empty.
+7. TEST:
+- parametrize data
+- open URL
+- call Page methods
+- call get_result(expected)
+- Always assert: result == expected
+
+- If selenium:
+    + use pytest fixture with Chrome driver
+    + use webdriver-manager with Service (no local driver)
+    + Browser must start maximized
+
+- If playwright:
+    + use pytest fixture (session)
+    + use sync_playwright
+    + launch_persistent_context (user_data_dir, args=["--start-maximized"], no_viewport=True)
+    + reuse context
+    + use existing page: context.pages[0] if exists else new_page()
+    + use page object
+
+CONSTRAINT:
+- No sleep
+- Only 2 files
+- DO NOT mix Selenium and Playwright
 """
+
 
 def save_test(code):
     files = re.findall(r"###FILE:(.+?)\n(.*?)(?=###FILE:|$)", code, re.S)
