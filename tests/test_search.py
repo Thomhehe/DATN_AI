@@ -5,6 +5,9 @@ from webdriver_manager.chrome import ChromeDriverManager
 
 from pages.search_page import SearchPage
 
+URL = "https://teelab.vn/"
+
+# Test data and ids per RULE 1
 test_data = [
     ("", "Nhập từ khóa để tìm kiếm"),
     ("TÚI", "Có 16 kết quả tìm kiếm phù hợp"),
@@ -16,20 +19,16 @@ ids = ["Search-1", "Search-2", "Search-3"]
 def driver():
     options = webdriver.ChromeOptions()
     options.add_argument("--start-maximized")
-    # Use webdriver-manager Service
+    # Use webdriver-manager Service (no local driver binary assumption)
     service = Service(ChromeDriverManager().install())
     driver = webdriver.Chrome(service=service, options=options)
     yield driver
-    try:
-        driver.quit()
-    except Exception:
-        pass
+    driver.quit()
 
-@pytest.mark.parametrize("keyword,expected", test_data, ids=ids)
-def test_search_flow(driver, keyword, expected):
-    url = "https://teelab.vn/"
-    driver.get(url)
+@pytest.mark.parametrize("input_value, expected", test_data, ids=ids)
+def test_search(input_value, expected, driver):
+    driver.get(URL)
     page = SearchPage(driver)
-    page.perform_actions(keyword)
+    page.perform_actions(input_value)
     result = page.get_result(expected)
     assert result == expected

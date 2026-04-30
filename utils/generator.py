@@ -60,9 +60,14 @@ RULES:
 
 3. LOCATOR:
 - Define locators in __init__
-- Since HTML is not provided, you MUST infer locators based on TEST CASES (e.g., field names, button texts, standard web patterns).
-- Use dynamic locators (e.g., XPath by visible text, name attributes, placeholders).
-- Priority: visible text > placeholder > name > generic css/xpath
+- Since you DO NOT have a real browser and CANNOT see the HTML DOM, DO NOT guess specific `id`, `name`, or `css` classes unless they are explicitly mentioned in the TEST CASES.
+- Instead, you MUST build robust, dynamic multi-attribute XPaths or Playwright locators based STRICTLY on the natural language texts, placeholders, or labels provided in the TEST CASES.
+- If selenium: Use robust XPaths that check multiple conditions simultaneously.
+    + Example for an input field: "//input[@placeholder='{{text}}' or @name='{{text}}' or preceding-sibling::label[contains(text(), '{{text}}')] or following-sibling::label[contains(text(), '{{text}}')]]"
+    + Example for a button: "//button[normalize-space()='{{text}}'] | //a[normalize-space()='{{text}}'] | //*[@role='button' and contains(text(), '{{text}}')]"
+- If playwright: Use text-based or role-based locators, chained with `.or_()`.
+    + Example: page.get_by_placeholder('{{text}}').or_(page.get_by_text('{{text}}')).or_(page.get_by_role('button', name='{{text}}'))
+- Locators MUST accurately reflect the exact wording from the steps in the TEST CASES.
 - For notifications, rely on the Multi-layered Notification Detection Engine rather than specific locators.
 
 4. ACTION
@@ -77,7 +82,10 @@ RULES:
 - Click:
     If selenium:
         - Button/input → element.click()
-        - Icon/img: use JS click
+        - For Icon/img/svg/i:
+          ALWAYS use JavaScript click as the ONLY interaction method.
+          NEVER generate regular click().
+          NEVER mix multiple click strategies.
 
     If playwright:
         - Button/input → locator.click()
@@ -94,10 +102,10 @@ RULES:
 
 5. WAIT
 - If selenium:
-    use WebDriverWait
+    use WebDriverWait. If an action causes a page navigation/redirect, ensure you explicitly wait for the new page or the new element to load before interacting.
 
 - If playwright:
-    use auto-wait (DO NOT use WebDriverWait)
+    use auto-wait (DO NOT use WebDriverWait). Playwright handles navigation waits automatically.
 
 6. RESULT (IMPORTANT):
 - get_result() returns final result
@@ -107,16 +115,18 @@ RULES:
     + If expected message indicates missing/empty input → Use inline validation logic (Layer 4).
     + If expected message indicates format/length validation → Use inline validation or HTML5 logic (Layer 4 or Layer 5).
     + If expected message indicates a business logic error (e.g., wrong password, login failed) → Use toast/snackbar logic (Layer 2) and optionally Layer 1/3 if needed.
-    + If expected message indicates a success message → Use toast/snackbar logic (Layer 2) or check URL redirect.
+    + If expected message indicates a success message and stays on the same page → Use toast/snackbar logic (Layer 2).
+    + If expected message indicates static text on a NEW page (e.g., welcome message, page header after redirect) → Use New Page Content logic (Layer 6).
   * Detection Layers Reference (Implement ONLY what is inferred above):
     + Layer 1 (Native Alerts): Handle browser alerts/dialogs (Selenium: WebDriverWait for alert / Playwright: dialog event listener).
     + Layer 2 (Toasts/Snackbars): Target transient elements using structural heuristics (role='alert', 'status' OR class containing 'toast', 'snackbar', 'notification', 'alert', 'message'). Use short wait times (1-3s) to quickly capture fast-disappearing toast messages before they vanish.
     + Layer 3 (Modals/Popups): Target dialog bodies (class containing 'modal-body', 'popup-content', 'dialog').
     + Layer 4 (DOM Pattern): Identify visible inline error/success messages based on DOM pattern recognition. Capture validation error messages if error locators are found in the HTML (e.g., .text-danger, .error, .invalid-feedback).
     + Layer 5 (JS Runtime Analysis): Extract HTML5 input validationMessage (element.validationMessage) if input is invalid and no visible error exists.
+    + Layer 6 (New Page Content): Explicitly wait for the new page to load (e.g., wait for URL change or document.readyState). Then, dynamically locate the element containing the expected text using the `expected` argument (e.g., `//*[contains(text(), '{{expected}}')]` in Selenium or `page.get_by_text(expected)` in Playwright).
 - Use try-except blocks (Selenium) or error-handling (Playwright) when checking for locators in the HTML to catch exceptions and prevent script crashes.
-- Return the text content of the detected notification.
-- Do not use the expected value in the detection logic.
+- Return the text content of the detected notification or element.
+- Except for Layer 6, do not use the expected value in the detection logic.
 - Do not fallback to URL when expected is not empty.
 7. TEST:
 - parametrize data

@@ -6,101 +6,132 @@ from selenium.webdriver.support import expected_conditions as EC
 class SearchPage:
     def __init__(self, driver):
         self.driver = driver
-        # Locators inferred by visible text / placeholder / name / generic patterns
-        self.search_button = (By.XPATH, "//button[contains(., 'Tìm') or contains(., 'tìm') or contains(@aria-label,'search') or contains(@class,'search')]")
-        self.search_input = (By.XPATH, "//input[@type='search' or contains(@placeholder,'Tìm') or contains(@placeholder,'tìm') or @name='s' or contains(@class,'search')]")
-        # Inline validation candidates (Layer 4)
-        self.inline_error_locators = [
-            (By.XPATH, "//*[contains(@class,'text-danger') and normalize-space(.)!='']"),
-            (By.XPATH, "//*[contains(@class,'invalid-feedback') and normalize-space(.)!='']"),
-            (By.XPATH, "//*[contains(@class,'error') and normalize-space(.)!='']"),
-            (By.XPATH, "//*[contains(@class,'help-block') and normalize-space(.)!='']"),
-            (By.XPATH, "//span[contains(@class,'error') and normalize-space(.)!='']"),
-        ]
-        # Toast/snackbar/result candidates (Layer 2)
-        self.toast_locators = [
-            (By.XPATH, "//*[@role='alert' and normalize-space(.)!='']"),
-            (By.XPATH, "//*[@role='status' and normalize-space(.)!='']"),
-            (By.XPATH, "//*[contains(translate(@class,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'toast') and normalize-space(.)!='']"),
-            (By.XPATH, "//*[contains(translate(@class,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'snackbar') and normalize-space(.)!='']"),
-            (By.XPATH, "//*[contains(translate(@class,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'notification') and normalize-space(.)!='']"),
-            (By.XPATH, "//*[contains(translate(@class,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'alert') and normalize-space(.)!='']"),
-            (By.XPATH, "//*[contains(@class,'woocommerce-result-count') and normalize-space(.)!='']"),
-            (By.XPATH, "//*[contains(translate(@class,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'result') and normalize-space(.)!='']"),
-            (By.XPATH, "//*[@id='search' or contains(@class,'search-results') or contains(@class,'search-result')][normalize-space(.)!='']"),
-        ]
+        # Locator for the search trigger (button/link/icon) - robust, text/aria/title based on the word "search"
+        self.search_trigger = (
+            By.CSS_SELECTOR, 'a[title="Tìm kiếm"]')
+        # Locator for the search input - robustly target inputs that look like a search/keyword field
+        self.search_input = (By.XPATH,
+            "//input["
+            " @type='search' "
+            " or contains(translate(@placeholder,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'tìm')"
+            " or contains(translate(@placeholder,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'từ khóa')"
+            " or contains(translate(@name,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'keyword')"
+            " or contains(translate(@aria-label,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'tìm')"
+            " or contains(translate(@aria-label,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'từ khóa')"
+            " or contains(translate(@id,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'search')"
+            " or contains(translate(@class,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'search')"
+            "]")
+        # Generic inline error locator patterns (Layer 4)
+        self.inline_error_xpath = (
+            "//div[contains(@class,'text-danger') or contains(@class,'error') or contains(@class,'invalid-feedback') or "
+            "contains(@class,'form-error') or contains(@class,'help-block') or contains(@class,'field-error') or "
+            "contains(@class,'input-error') or contains(@class,'error-message') or contains(@class,'invalid') ]"
+        )
+        # Generic toast/snackbar locator patterns (Layer 2)
+        self.toast_xpath = (
+            "//*[( @role='alert' or @role='status' or contains(translate(@class,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'toast') "
+            "or contains(translate(@class,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'snackbar') "
+            "or contains(translate(@class,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'notification') "
+            "or contains(translate(@class,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'alert') "
+            "or contains(translate(@class,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'message') ) and string-length(normalize-space(.))>0]"
+        )
 
-    def perform_actions(self, value):
-        # 1. Click search (button/icon). Use visibility_of_element_located for button/input click.
+    def perform_actions(self, keyword):
+        wait = WebDriverWait(self.driver, 10)
+        # Step 2: Click search trigger
         try:
-            btn = WebDriverWait(self.driver, 10).until(EC.visibility_of_element_located(self.search_button))
-            btn.click()
+            el = wait.until(EC.visibility_of_element_located(self.search_trigger))
+            tag = el.tag_name.lower()
+            # If the trigger looks like an icon element, use JS click; otherwise use normal click
+            if tag in ("i", "svg", "img") or ('icon' in (el.get_attribute('class') or '').lower()):
+                self.driver.execute_script("arguments[0].click();", el)
+            else:
+                el.click()
         except Exception:
-            # fallback: try JS click if normal click fails or element is not interactable
+            # As a fallback, try clicking any element that has role=button and contains 'search' in aria/title/class
             try:
-                btn = WebDriverWait(self.driver, 10).until(EC.presence_of_element_located(self.search_button))
-                self.driver.execute_script("arguments[0].click();", btn)
+                fallback = self.driver.find_element(By.XPATH,
+                    "//*[@role='button' and (contains(translate(@aria-label,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'search') "
+                    "or contains(translate(@title,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'search') "
+                    "or contains(translate(@class,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'search'))]")
+                fallback.click()
             except Exception:
                 pass
 
-        # 2. Find input, clear, enter value
-        input_el = WebDriverWait(self.driver, 10).until(EC.visibility_of_element_located(self.search_input))
+        # Step 3 & 4: Locate search input, clear and press Enter (with or without keyword)
         try:
-            input_el.clear()
+            inp = wait.until(EC.visibility_of_element_located(self.search_input))
+            # Use clear() then send_keys
+            inp.clear()
+            if keyword:
+                inp.send_keys(keyword)
+            # Press Enter to submit search
+            inp.send_keys(Keys.ENTER)
         except Exception:
-            # Some inputs may not support clear(); set empty via JS
+            # If explicit search input not found, try a generic input box near the search trigger
             try:
-                self.driver.execute_script("arguments[0].value = '';", input_el)
+                generic = self.driver.find_element(By.XPATH, "//input")
+                generic.clear()
+                if keyword:
+                    generic.send_keys(keyword)
+                generic.send_keys(Keys.ENTER)
             except Exception:
                 pass
-
-        if value is not None:
-            if value != "":
-                input_el.send_keys(value)
-            # Press Enter
-            input_el.send_keys(Keys.ENTER)
 
     def get_result(self, expected):
-        # If expected is empty string, return current URL (not used by these tests)
-        if not expected:
-            return self.driver.current_url
-
-        # Infer detection layer from expected
-        exp_lower = expected.lower() if expected else ""
-        # If expected indicates missing/empty input -> Layer 4 (inline validation)
-        if "nhập" in exp_lower or "vui lòng nhập" in exp_lower or "không được để trống" in exp_lower:
-            for locator in self.inline_error_locators:
-                try:
-                    el = WebDriverWait(self.driver, 3).until(EC.visibility_of_element_located(locator))
-                    text = el.text.strip()
-                    if text:
-                        return text
-                except Exception:
-                    continue
-            # If no inline message found, return empty string to fail the assert in test
-            return ""
-
-        # Otherwise treat as informational/result message -> Layer 2 (toasts/snackbars) or result area
-        for locator in self.toast_locators:
+        """
+        Return the detected message according to inferred detection layer:
+         - If expected indicates missing/empty input -> Layer 4 (inline validation)
+         - Else -> Layer 2 (toasts/snackbars)
+        """
+        # Decide layer based on expected message wording
+        expected_lower = expected.lower() if expected else ""
+        wait_short = WebDriverWait(self.driver, 3)
+        # Layer 4: inline validation (for messages like "Nhập từ khóa để tìm kiếm")
+        if "nhập" in expected_lower or "vui lòng" in expected_lower or expected_lower.strip() == "":
             try:
-                el = WebDriverWait(self.driver, 3).until(EC.visibility_of_element_located(locator))
-                text = el.text.strip()
-                if text:
-                    return text
+                # Try common inline error selectors first
+                el = wait_short.until(EC.visibility_of_element_located((By.XPATH, self.inline_error_xpath)))
+                return el.text.strip()
             except Exception:
-                continue
-
-        # As a last resort (still within Layer 2 heuristics), try broader search for visible non-empty elements under body
-        try:
-            candidates = self.driver.find_elements(By.XPATH, "//body//*[normalize-space(text())!='' and (contains(translate(@class,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'message') or contains(translate(@class,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'notice') or contains(translate(@class,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'kq') )]")
-            for c in candidates:
+                # Try nearby text nodes around input field (following-sibling or parent)
                 try:
-                    t = c.text.strip()
-                    if t:
-                        return t
+                    inp = self.driver.find_element(*self.search_input)
+                    # following sibling
+                    try:
+                        sib = inp.find_element(By.XPATH, "following-sibling::*[string-length(normalize-space(.))>0][1]")
+                        if sib and sib.is_displayed():
+                            return sib.text.strip()
+                    except Exception:
+                        pass
+                    # parent
+                    try:
+                        parent_msg = inp.find_element(By.XPATH, "ancestor::*[1]//*[contains(@class,'error') or contains(@class,'text-danger') or string-length(normalize-space(.))>0]")
+                        if parent_msg and parent_msg.is_displayed():
+                            return parent_msg.text.strip()
+                    except Exception:
+                        pass
                 except Exception:
-                    continue
-        except Exception:
-            pass
-
-        return ""
+                    pass
+            # If nothing found, attempt HTML5 validationMessage (Layer 5 fallback not primary for inline but safe)
+            try:
+                inp = self.driver.find_element(*self.search_input)
+                vm = self.driver.execute_script("return arguments[0].validationMessage || '';", inp)
+                return vm.strip()
+            except Exception:
+                return ""
+        else:
+            # Layer 2: toasts/snackbars - short wait for transient messages
+            try:
+                toast = wait_short.until(EC.visibility_of_element_located((By.XPATH, self.toast_xpath)))
+                return toast.text.strip()
+            except Exception:
+                # Try to capture any persistent area that might show result counts (e.g., headings or summaries)
+                try:
+                    summary = self.driver.find_element(By.XPATH,
+                        "//*[contains(translate(normalize-space(.),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'kết quả') or contains(translate(normalize-space(.),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'kết quả tìm kiếm') or contains(translate(normalize-space(.),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'kết quả phù hợp')]")
+                    if summary and summary.is_displayed():
+                        return summary.text.strip()
+                except Exception:
+                    pass
+            return ""
