@@ -1,4 +1,2 @@
 "DESCRIPTION","DURATION IN MS","NAME","PARENT SUITE","START TIME","STATUS","STOP TIME","SUB SUITE","SUITE","TEST CLASS","TEST METHOD"
-"","5399","test_login_pos[Login_Pos-3]","tests","2026-04-29","failed","2026-04-29","","test_login_pos","",""
-"","4560","test_login_pos[Login_Pos-1]","tests","2026-04-29","failed","2026-04-29","","test_login_pos","",""
-"","4784","test_login_pos[Login_Pos-2]","tests","2026-04-29","failed","2026-04-29","","test_login_pos","",""
+"","607","test_load_excel_two_sheets_parses_test_data","tests","2026-05-01","passed","2026-05-01","","test_data_loader","",""

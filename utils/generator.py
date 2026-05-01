@@ -3,16 +3,27 @@ import re
 
 
 def build_prompt_all(testcases, url, framework):
-    first_feature = testcases[0]["id"].lower()
-    first_feature = first_feature.replace("[", "").replace("]", "").split("-")[0]
+    first_feature = testcases[0].get("feature", "test").lower()
+    first_feature = re.sub(r'[^a-z0-9_]', '_', first_feature).strip('_')
+    if not first_feature:
+        first_feature = "test"
 
     content = ""
     for tc in testcases:
+        data_section = ""
+        if tc.get("test_data"):
+            data_lines = []
+            for data in tc["test_data"]:
+                row_text = ", ".join(f"{key}: {value}" for key, value in data.items())
+                data_lines.append(f"- {row_text}")
+            data_section = "\nTEST DATA:\n" + "\n".join(data_lines)
+
         content += f"""
 ID: {tc['id']}
+DESCRIPTION: {tc.get('description', '')}
 STEPS:
 {tc['steps']}
-EXPECTED: {tc['expected']}
+EXPECTED: {tc['expected']}{data_section}
 """
 
     return f"""
@@ -61,44 +72,35 @@ RULES:
 3. LOCATOR:
 - Define locators in __init__
 - Since you DO NOT have a real browser and CANNOT see the HTML DOM, DO NOT guess specific `id`, `name`, or `css` classes unless they are explicitly mentioned in the TEST CASES.
-- Instead, you MUST build robust, dynamic multi-attribute XPaths or Playwright locators based STRICTLY on the natural language texts, placeholders, or labels provided in the TEST CASES.
-- If selenium: Use robust XPaths that check multiple conditions simultaneously.
-    + Example for an input field: "//input[@placeholder='{{text}}' or @name='{{text}}' or preceding-sibling::label[contains(text(), '{{text}}')] or following-sibling::label[contains(text(), '{{text}}')]]"
-    + Example for a button: "//button[normalize-space()='{{text}}'] | //a[normalize-space()='{{text}}'] | //*[@role='button' and contains(text(), '{{text}}')]"
-- If playwright: Use text-based or role-based locators, chained with `.or_()`.
-    + Example: page.get_by_placeholder('{{text}}').or_(page.get_by_text('{{text}}')).or_(page.get_by_role('button', name='{{text}}'))
-- Locators MUST accurately reflect the exact wording from the steps in the TEST CASES.
-- For notifications, rely on the Multi-layered Notification Detection Engine rather than specific locators.
+- Build locators that are broad enough to be robust, but keep them concise and avoid excessively long union chains. Prefer compact composite predicates over many repeated fallback branches.
+- For XPaths, use `translate()` to handle case-insensitivity for both text and attributes (e.g., lowercasing all text before comparison).
+- Combine multiple possible node types and attribute conditions using the `|` (union) operator and `or` logical conditions only when needed to cover realistic matching variants.
+- For buttons/actions: ALWAYS generate a comprehensive union locator `|` that covers multiple possible HTML implementations. You MUST include `//button`, `//a`, AND `//input[@type='submit' or @type='button']` in your XPath.
+- Build precise locators matching the EXACT text or action keyword derived from the TEST CASES steps. Use case-insensitive matching on `normalize-space(.)` for `button`/`a`, and `@value` for `input`. Example: `//button[contains(translate(normalize-space(.), '...', '...'), 'login')] | //input[@type='submit' or @type='button'][contains(translate(@value, '...', '...'), 'login')] | //a[contains(translate(normalize-space(.), '...', '...'), 'login')]`.
+- Include `*[@role='button']` or elements with `class` containing 'btn' or 'button' as fallbacks to ensure compatibility across different UI frameworks.
+- WARNING: DO NOT use generic `div`, `span`, `p`, `h1`-`h6`, or `td` in button locators just by matching text, because you might accidentally match an unclickable parent container. ONLY fallback to `div` or `span` if they have a `class` containing `btn`, `button`, or `role='button'`.
+- For action icons: prioritize the outer clickable wrapper (`button`, `a`, `*[@role='button']`) matching by `title`, `aria-label`, or class containing the action keyword (e.g., `search`, `delete`). Allow nested icon nodes (`svg`, `i`, `path`, `img`) only if targeting the icon directly.
+- For tooltip or hover-triggered controls, include `@title`, `@aria-label`, `@data-tooltip`, `@data-title` matching the action keyword.
+- For inputs: Exhaustively include checks for `@placeholder`, `@name`, `@aria-label`, `@type`, and `contains(@class, ...)`, while still allowing flexible locators on `span`/`div` wrappers when input fields are visually grouped.
+- Even if a step mentions "icon", you MUST STILL generate a comprehensive locator covering the wrapper element, button, link, or the icon itself based on the action intent. The "icon" keyword merely indicates the click method to use.
+- For EXPECTED results, you MUST NOT hardcode static locators if you can extract the expected text dynamically.
+- INSTEAD, build a precise, case-insensitive XPath inside `get_result()` that dynamically searches for the extracted quoted texts. If multiple quoted texts exist, iterate over them to check.
+- To avoid capturing the entire page text from generic structural elements (`body`, `html`, `main`, etc.), your XPath MUST target the DEEPEST element containing the text. Use this XPath pattern: `//*[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '{{lower_text}}') and not(*[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '{{lower_text}}')])]"`. This guarantees you catch the exact element (toast, span, div, p) holding the message, whether on the current page or a new page.
+- If playwright: Chain multiple broad text, role, and generic locator queries using `.or_()`.
 
 4. ACTION
-- Steps must follow TEST CASES strictly
+- Steps must follow TEST CASES strictly. You MUST generate code that explicitly performs EACH step listed in the TEST CASES sequentially. Do not skip steps or combine them inappropriately. Ensure you wait for the necessary elements to be interactable before each step to avoid missing actions.
 - Input:
     If selenium:
-        use visibility_of_element_located
+        use visibility_of_element_located for input fields.
         clear() + send_keys(value)
 
     If playwright:
         use page.locator(...).fill(value)
 - Click:
-    If selenium:
-        - Button/input → element.click()
-        - For Icon/img/svg/i:
-          ALWAYS use JavaScript click as the ONLY interaction method.
-          NEVER generate regular click().
-          NEVER mix multiple click strategies.
-
-    If playwright:
-        - Button/input → locator.click()
-
-        - Icon/img:
-            find clickable parent (e.g., <a>, <button>)
-            click parent if exists
-
-            if cannot click or element is hidden:
-                use locator.evaluate("el => el.click()")
-
-            if element has hidden class (e.g., d-none):
-                remove it using evaluate before click
+    - For ALL buttons, links, icons, and actions:
+        + If selenium: DO NOT use `element_to_be_clickable` because it causes TimeoutExceptions if the element is slightly obscured or unclickable. ALWAYS use `presence_of_element_located` to wait for the clickable element in the DOM. Then, ALWAYS use JavaScript click: `self.driver.execute_script("arguments[0].click();", element)` to ensure the click is successful and bypass intercepts.
+        + If playwright: use normal `.click(force=True)`.
 
 5. WAIT
 - If selenium:
@@ -108,37 +110,41 @@ RULES:
     use auto-wait (DO NOT use WebDriverWait). Playwright handles navigation waits automatically.
 
 6. RESULT (IMPORTANT):
-- get_result() returns final result
-- If expected is empty: return current URL
-- If expected is not empty, you MUST INFER the correct notification type based on the expected message and ONLY generate code for the relevant detection layers. Do NOT generate redundant code. Ensure the generated logic is universally applicable across all features and web pages.
-  * Inference Rules:
-    + If expected message indicates missing/empty input → Use inline validation logic (Layer 4).
-    + If expected message indicates format/length validation → Use inline validation or HTML5 logic (Layer 4 or Layer 5).
-    + If expected message indicates a business logic error (e.g., wrong password, login failed) → Use toast/snackbar logic (Layer 2) and optionally Layer 1/3 if needed.
-    + If expected message indicates a success message and stays on the same page → Use toast/snackbar logic (Layer 2).
-    + If expected message indicates static text on a NEW page (e.g., welcome message, page header after redirect) → Use New Page Content logic (Layer 6).
-  * Detection Layers Reference (Implement ONLY what is inferred above):
-    + Layer 1 (Native Alerts): Handle browser alerts/dialogs (Selenium: WebDriverWait for alert / Playwright: dialog event listener).
-    + Layer 2 (Toasts/Snackbars): Target transient elements using structural heuristics (role='alert', 'status' OR class containing 'toast', 'snackbar', 'notification', 'alert', 'message'). Use short wait times (1-3s) to quickly capture fast-disappearing toast messages before they vanish.
-    + Layer 3 (Modals/Popups): Target dialog bodies (class containing 'modal-body', 'popup-content', 'dialog').
-    + Layer 4 (DOM Pattern): Identify visible inline error/success messages based on DOM pattern recognition. Capture validation error messages if error locators are found in the HTML (e.g., .text-danger, .error, .invalid-feedback).
-    + Layer 5 (JS Runtime Analysis): Extract HTML5 input validationMessage (element.validationMessage) if input is invalid and no visible error exists.
-    + Layer 6 (New Page Content): Explicitly wait for the new page to load (e.g., wait for URL change or document.readyState). Then, dynamically locate the element containing the expected text using the `expected` argument (e.g., `//*[contains(text(), '{{expected}}')]` in Selenium or `page.get_by_text(expected)` in Playwright).
-- Use try-except blocks (Selenium) or error-handling (Playwright) when checking for locators in the HTML to catch exceptions and prevent script crashes.
-- Return the text content of the detected notification or element.
-- Except for Layer 6, do not use the expected value in the detection logic.
-- Do not fallback to URL when expected is not empty.
+- EXTRACT QUOTED TEXT: If the `EXPECTED` value contains text inside double quotes (e.g. `Hiển thị lỗi "Email trống" hoặc "Sai định dạng"`), you MUST use `re.findall(r'"([^"]*)"', expected)` inside `get_result()` to dynamically extract a list of ALL quoted substrings.
+- In `get_result()`, if quoted texts exist, iterate through them and build dynamic XPaths to find the element. If no quotes exist, use the full `expected` string.
+- get_result() returns final result text. The logic MUST be strictly tailored to the extracted expected value(s).
+- To catch messages (errors, success, notifications) reliably whether on the CURRENT PAGE or ANOTHER PAGE, you MUST explicitly WAIT for the expected text to appear in the DOM.
+- The dynamic XPath MUST find the deepest element containing the text to avoid grabbing large containers. Use this exact pattern:
+  `xpath = f"//*[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '{{lower_text}}') and not(*[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '{{lower_text}}')])]"`. Ensure you lowercase `text` in Python before inserting it into the XPath.
+- Wait Strategy for Messages:
+  * If selenium: Use `WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.XPATH, xpath)))` to explicitly wait for the message element.
+  * If playwright: Use `self.page.locator(xpath).first.wait_for(state="attached", timeout=10000)` to wait for the element.
+- By waiting for this dynamic XPath, the script will automatically pause for AJAX requests, toasts, or page transitions to finish and display the message. You do NOT need to hardcode specific container classes or page transition checks.
+- Detection Layers Reference:
+  + Layer 1 (Native Alerts): Handle browser alerts/dialogs first if applicable.
+  + Layer 2 (DOM Text Search): Use the wait strategy and dynamic XPath described above. This handles toasts, inline errors, and cross-page messages seamlessly. Return the `.text` (Selenium) or `.inner_text()` (Playwright) of the matched element.
+  + Layer 3 (JS Runtime Analysis): Extract HTML5 input validationMessage (`element.validationMessage`). STRICT RULE: ONLY use this as a fallback if Layer 2 fails (e.g., inside the `except` block).
+- Use try-except blocks (Selenium) or error-handling (Playwright) when waiting for elements so the script does not crash immediately, allowing fallback to Layer 3 or returning an empty string/URL if everything fails.
+- Return ONLY the normalized, stripped visible text content of the SPECIFIC detected element. Do NOT return the text content of the entire page, body, or large containers.
+- If expected is empty or indicates purely a URL change: wait for navigation and return the current URL.
+- Do not fallback to URL when expected is a specific text message.
 7. TEST:
 - parametrize data
 - open URL
 - call Page methods
 - call get_result(expected)
-- Always assert: result == expected
+- Parsing Expected in Assertion: You MUST extract quoted strings from `expected` inside the test function to perform an exact match assertion:
+  `expected_texts = re.findall(r'"([^"]*)"', expected)`
+  `if expected_texts:`
+  `    assert any(text == result for text in expected_texts)`
+  `else:`
+  `    assert expected == result`
+- This ensures that if 1 of 2 expected outcomes in double quotes matches the result EXACTLY, the test PASSES. DO NOT use `in` for comparison.
 
 - If selenium:
     + use pytest fixture with Chrome driver
     + use webdriver-manager with Service (no local driver)
-    + Browser must start maximized
+    + ChromeOptions MUST contain EXACTLY one argument: "--start-maximized"
 
 - If playwright:
     + use pytest fixture (session)
