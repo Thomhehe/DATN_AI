@@ -5,6 +5,25 @@ import pandas as pd
 
 import string
 
+def extract_expected_value(expected_text):
+    """
+    Chuẩn hóa expected:
+    - Lấy phần trong ngoặc kép "" hoặc ngoặc đơn ''
+    - 1 giá trị → string
+    - nhiều giá trị → list
+    - không có "" hoặc '' → trả về rỗng, KHÔNG lấy cả câu dài
+    """
+    if not expected_text or str(expected_text).lower() == "nan":
+        return ""
+
+    text = str(expected_text).strip()
+
+    matches = [m[0] or m[1] for m in re.findall(r'"([^"]*)"|\'([^\']*)\'', text)]
+
+    if matches:
+        return matches[0] if len(matches) == 1 else matches
+
+    return ""
 
 def extract_feature(tc_id, title=""):
     tc_id_str = str(tc_id).lower()
@@ -131,7 +150,12 @@ def parse_testdata_sheet(df):
             if col and col not in {id_col, desc_col}:
                 val = row.get(col)
                 if not pd.isna(val) and str(val).strip():
-                    data[col.strip()] = str(val).strip()
+                    col_name = col.strip()
+                    val_str = str(val).strip()
+                    if "expected" in col_name.lower():
+                        data[col_name] = extract_expected_value(val_str)
+                    else:
+                        data[col_name] = val_str
 
         if not data:
             continue
@@ -178,12 +202,13 @@ def parse_testcase_sheet(df, data_by_key):
                         break
 
         test_data = found_data or []
+        raw_expected = str(row.get(expected_col)).strip() if expected_col is not None else ""
         testcases.append({
             "id": tc_id,
             "feature": extract_feature(tc_id, str(row.get(description_col)).strip() if description_col is not None else ""),
             "description": str(row.get(description_col)).strip() if description_col is not None else "",
             "steps": steps,
-            "expected": str(row.get(expected_col)).strip() if expected_col is not None else "",
+            "expected": extract_expected_value(raw_expected),
             "test_data": test_data,
         })
 

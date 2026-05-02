@@ -14,16 +14,36 @@ def build_prompt_all(testcases, url, framework):
         if tc.get("test_data"):
             data_lines = []
             for data in tc["test_data"]:
-                row_text = ", ".join(f"{key}: {value}" for key, value in data.items())
+                parts = []
+                for key, value in data.items():
+                    if "expected" in key.lower():
+                        if isinstance(value, list):
+                            val_str = "[" + ", ".join(f'"{v}"' for v in value) + "]"
+                        elif isinstance(value, str) and value:
+                            val_str = f'"{value}"'
+                        else:
+                            val_str = '""'
+                        parts.append(f"{key}: {val_str}")
+                    else:
+                        parts.append(f"{key}: {value}")
+                row_text = ", ".join(parts)
                 data_lines.append(f"- {row_text}")
             data_section = "\nTEST DATA:\n" + "\n".join(data_lines)
+
+        expected_display = tc["expected"]
+        if isinstance(expected_display, list):
+            expected_display = "[" + ", ".join(f'"{e}"' for e in expected_display) + "]"
+        elif isinstance(expected_display, str) and expected_display:
+            expected_display = f'"{expected_display}"'
+        else:
+            expected_display = '""'
 
         content += f"""
 ID: {tc['id']}
 DESCRIPTION: {tc.get('description', '')}
 STEPS:
 {tc['steps']}
-EXPECTED: {tc['expected']}{data_section}
+EXPECTED: {expected_display}{data_section}
 """
 
     return f"""
@@ -61,6 +81,10 @@ RULES:
 - test_data = [(input1, input2, ..., expected)]
 - ids = [test case IDs]
 - Inputs are SINGLE values (NOT list)
+- IMPORTANT: The `expected` values provided in TEST CASES or TEST DATA are ALREADY extracted. You MUST use them EXACTLY as shown in the prompt (whether it is a string or a list).
+  * Do NOT add extra text or change the format of the expected value.
+  * Example: If prompt says `expected: "Email trống"`, expected value is `"Email trống"`
+  * Example 2: If prompt says `expected: ["Lỗi 1", "Lỗi 2"]`, expected value is `["Lỗi 1", "Lỗi 2"]`
 
 2. STRUCTURE:
 - One Page class only
@@ -75,14 +99,12 @@ RULES:
 - Build locators that are broad enough to be robust, but keep them concise and avoid excessively long union chains. Prefer compact composite predicates over many repeated fallback branches.
 - For XPaths, use `translate()` to handle case-insensitivity for both text and attributes (e.g., lowercasing all text before comparison).
 - Combine multiple possible node types and attribute conditions using the `|` (union) operator and `or` logical conditions only when needed to cover realistic matching variants.
-- For buttons/actions: ALWAYS generate a comprehensive union locator `|` that covers multiple possible HTML implementations. You MUST include `//button`, `//a`, AND `//input[@type='submit' or @type='button']` in your XPath.
-- Build precise locators matching the EXACT text or action keyword derived from the TEST CASES steps. Use case-insensitive matching on `normalize-space(.)` for `button`/`a`, and `@value` for `input`. Example: `//button[contains(translate(normalize-space(.), '...', '...'), 'login')] | //input[@type='submit' or @type='button'][contains(translate(@value, '...', '...'), 'login')] | //a[contains(translate(normalize-space(.), '...', '...'), 'login')]`.
-- Include `*[@role='button']` or elements with `class` containing 'btn' or 'button' as fallbacks to ensure compatibility across different UI frameworks.
-- WARNING: DO NOT use generic `div`, `span`, `p`, `h1`-`h6`, or `td` in button locators just by matching text, because you might accidentally match an unclickable parent container. ONLY fallback to `div` or `span` if they have a `class` containing `btn`, `button`, or `role='button'`.
-- For action icons: prioritize the outer clickable wrapper (`button`, `a`, `*[@role='button']`) matching by `title`, `aria-label`, or class containing the action keyword (e.g., `search`, `delete`). Allow nested icon nodes (`svg`, `i`, `path`, `img`) only if targeting the icon directly.
-- For tooltip or hover-triggered controls, include `@title`, `@aria-label`, `@data-tooltip`, `@data-title` matching the action keyword.
+- For buttons/actions: DO NOT hardcode specific wrapper classes (e.g., `pull-xs-left`). ALWAYS generate a UNIVERSAL, multi-layered XPath using `|` to cover ALL possible clickable elements.
+- The universal button XPath MUST comprehensively target: native buttons (`//button`), form submits (`//input[@type='submit' or @type='button']`), links (`//a`), and styled elements (`//*[contains(@class, 'btn') or contains(@class, 'button') or @role='button']`).
+- Use this exact, robust pattern for case-insensitive matching (including Vietnamese diacritics). Replace '{{keyword}}' with the lowercase action text (e.g., 'đăng nhập'): `//button[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÀẠẢÃÂẤẦẬẨẪĂẮẰẶẲẴÉÈẸẺẼÊẾỀỆỂỄÍÌỊỈĨÓÒỌỎÕÔỐỒỘỔỖƠỚỜỢỞỠÚÙỤỦŨƯỨỪỰỬỮÝỲỴỶỸĐ', 'abcdefghijklmnopqrstuvwxyzáàạảãâấầậẩẫăắằặẳẵéèẹẻẽêếềệểễíìịỉĩóòọỏõôốồộổỗơớờợởỡúùụủũưứừựửữýỳỵỷỹđ'), '{{keyword}}')] | //input[(@type='submit' or @type='button') and contains(translate(@value, 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÀẠẢÃÂẤẦẬẨẪĂẮẰẶẲẴÉÈẸẺẼÊẾỀỆỂỄÍÌỊỈĨÓÒỌỎÕÔỐỒỘỔỖƠỚỜỢỞỠÚÙỤỦŨƯỨỪỰỬỮÝỲỴỶỸĐ', 'abcdefghijklmnopqrstuvwxyzáàạảãâấầậẩẫăắằặẳẵéèẹẻẽêếềệểễíìịỉĩóòọỏõôốồộổỗơớờợởỡúùụủũưứừựửữýỳỵỷỹđ'), '{{keyword}}')] | //a[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÀẠẢÃÂẤẦẬẨẪĂẮẰẶẲẴÉÈẸẺẼÊẾỀỆỂỄÍÌỊỈĨÓÒỌỎÕÔỐỒỘỔỖƠỚỜỢỞỠÚÙỤỦŨƯỨỪỰỬỮÝỲỴỶỸĐ', 'abcdefghijklmnopqrstuvwxyzáàạảãâấầậẩẫăắằặẳẵéèẹẻẽêếềệểễíìịỉĩóòọỏõôốồộổỗơớờợởỡúùụủũưứừựửữýỳỵỷỹđ'), '{{keyword}}')] | //*[contains(@class, 'btn') or contains(@class, 'button') or @role='button'][contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÀẠẢÃÂẤẦẬẨẪĂẮẰẶẲẴÉÈẸẺẼÊẾỀỆỂỄÍÌỊỈĨÓÒỌỎÕÔỐỒỘỔỖƠỚỜỢỞỠÚÙỤỦŨƯỨỪỰỬỮÝỲỴỶỸĐ', 'abcdefghijklmnopqrstuvwxyzáàạảãâấầậẩẫăắằặẳẵéèẹẻẽêếềệểễíìịỉĩóòọỏõôốồộổỗơớờợởỡúùụủũưứừựửữýỳỵỷỹđ'), '{{keyword}}') or contains(translate(@value, 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÀẠẢÃÂẤẦẬẨẪĂẮẰẶẲẴÉÈẸẺẼÊẾỀỆỂỄÍÌỊỈĨÓÒỌỎÕÔỐỒỘỔỖƠỚỜỢỞỠÚÙỤỦŨƯỨỪỰỬỮÝỲỴỶỸĐ', 'abcdefghijklmnopqrstuvwxyzáàạảãâấầậẩẫăắằặẳẵéèẹẻẽêếềệểễíìịỉĩóòọỏõôốồộổỗơớờợởỡúùụủũưứừựửữýỳỵỷỹđ'), '{{keyword}}') or contains(translate(@title, 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÀẠẢÃÂẤẦẬẨẪĂẮẰẶẲẴÉÈẸẺẼÊẾỀỆỂỄÍÌỊỈĨÓÒỌỎÕÔỐỒỘỔỖƠỚỜỢỞỠÚÙỤỦŨƯỨỪỰỬỮÝỲỴỶỸĐ', 'abcdefghijklmnopqrstuvwxyzáàạảãâấầậẩẫăắằặẳẵéèẹẻẽêếềệểễíìịỉĩóòọỏõôốồộổỗơớờợởỡúùụủũưứừựửữýỳỵỷỹđ'), '{{keyword}}')]`
+- WARNING: NEVER match generic `div`, `span`, `p` tags purely by text without checking for `btn`/`button` classes or `role='button'`, to avoid clicking unclickable parents.
+- For icons/tooltips: Use the exact same universal XPath, as it already covers `@title` and generic action wrappers seamlessly. Allow nested icon nodes (`svg`, `i`) ONLY if targeting the icon directly.
 - For inputs: Exhaustively include checks for `@placeholder`, `@name`, `@aria-label`, `@type`, and `contains(@class, ...)`, while still allowing flexible locators on `span`/`div` wrappers when input fields are visually grouped.
-- Even if a step mentions "icon", you MUST STILL generate a comprehensive locator covering the wrapper element, button, link, or the icon itself based on the action intent. The "icon" keyword merely indicates the click method to use.
 - For EXPECTED results, you MUST NOT hardcode static locators if you can extract the expected text dynamically.
 - INSTEAD, build a precise, case-insensitive XPath inside `get_result()` that dynamically searches for the extracted quoted texts. If multiple quoted texts exist, iterate over them to check.
 - To avoid capturing the entire page text from generic structural elements (`body`, `html`, `main`, etc.), your XPath MUST target the DEEPEST element containing the text. Use this XPath pattern: `//*[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '{{lower_text}}') and not(*[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '{{lower_text}}')])]"`. This guarantees you catch the exact element (toast, span, div, p) holding the message, whether on the current page or a new page.
@@ -110,9 +132,9 @@ RULES:
     use auto-wait (DO NOT use WebDriverWait). Playwright handles navigation waits automatically.
 
 6. RESULT (IMPORTANT):
-- EXTRACT QUOTED TEXT: If the `EXPECTED` value contains text inside double quotes (e.g. `Hiển thị lỗi "Email trống" hoặc "Sai định dạng"`), you MUST use `re.findall(r'"([^"]*)"', expected)` inside `get_result()` to dynamically extract a list of ALL quoted substrings.
-- In `get_result()`, if quoted texts exist, iterate through them and build dynamic XPaths to find the element. If no quotes exist, use the full `expected` string.
-- get_result() returns final result text. The logic MUST be strictly tailored to the extracted expected value(s).
+- In `get_result(expected)`, the `expected` argument will be the exact string or a list of strings (as defined in test_data).
+- If `expected` is a list, iterate through it to build dynamic XPaths and wait for any of them. If it is a string, build the dynamic XPath for it.
+- get_result() returns the final result text. The logic MUST wait for the expected element(s).
 - To catch messages (errors, success, notifications) reliably whether on the CURRENT PAGE or ANOTHER PAGE, you MUST explicitly WAIT for the expected text to appear in the DOM.
 - The dynamic XPath MUST find the deepest element containing the text to avoid grabbing large containers. Use this exact pattern:
   `xpath = f"//*[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '{{lower_text}}') and not(*[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '{{lower_text}}')])]"`. Ensure you lowercase `text` in Python before inserting it into the XPath.
@@ -133,13 +155,12 @@ RULES:
 - open URL
 - call Page methods
 - call get_result(expected)
-- Parsing Expected in Assertion: You MUST extract quoted strings from `expected` inside the test function to perform an exact match assertion:
-  `expected_texts = re.findall(r'"([^"]*)"', expected)`
-  `if expected_texts:`
-  `    assert any(text == result for text in expected_texts)`
+- Assertion Logic: Since `expected` in `test_data` is already extracted, assert directly:
+  `if isinstance(expected, list):`
+  `    assert any(text == result for text in expected)`
   `else:`
-  `    assert expected == result`
-- This ensures that if 1 of 2 expected outcomes in double quotes matches the result EXACTLY, the test PASSES. DO NOT use `in` for comparison.
+  `    assert result == expected`
+- DO NOT use `in` for comparison (e.g. do not use `assert expected in result`). MUST use exact match `==`.
 
 - If selenium:
     + use pytest fixture with Chrome driver
