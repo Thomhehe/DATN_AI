@@ -64,6 +64,7 @@ def parse_testcase(df, td_map):
     expected_col = next((c for c in df.columns if "expected" in normalize(c)), None)
     td_col = next((c for c in df.columns if "td id" in normalize(c) or "test data" in normalize(c)), None)
     locator_col = next((c for c in df.columns if "locator" in normalize(c)), None)
+    precondition_col = next((c for c in df.columns if "precondition" in normalize(c) or "điều kiện" in normalize(c)), None)
 
     if not id_col or not step_col:
         return {
@@ -103,9 +104,16 @@ def parse_testcase(df, td_map):
             if matches:
                 expected_for_json = [m[1] for m in matches]
 
+        precondition = (
+            str(row.get(precondition_col)).strip()
+            if precondition_col and not pd.isna(row.get(precondition_col))
+            else ""
+        )
+
         # Dữ liệu dùng cho AI sinh code
         prompt_cases.append({
             "id": tc_id,
+            "precondition": precondition,
             "steps": str(row.get(step_col)).strip(),
             "locator": (
                 str(row.get(locator_col)).strip()

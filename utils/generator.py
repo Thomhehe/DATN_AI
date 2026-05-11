@@ -8,6 +8,7 @@ def build_prompt_all(testcases, url, framework, feature_name):
     for tc in testcases:
         content += f"""
 ID: {tc['id']}
+PRECONDITION: {tc.get('precondition', '')}
 STEPS:{tc.get('steps', '')}
 LOCATOR:{tc.get('locator', '')}
 DATA:{tc.get('data', {})}
@@ -34,9 +35,10 @@ DO NOT use markdown blocks, generate extra files, or change filenames.
 2. FRAMEWORK RULES
 If selenium: Use selenium.webdriver, WebDriverWait, expected_conditions, webdriver-manager. Use self.driver. Start maximized.
 If playwright: Use playwright.sync_api, page.locator(), sync_playwright. DO NOT use launch_persistent_context. Use standard chromium.launch(). Use self.page. DO NOT mix with Selenium APIs.
-
+ut
 3. PAGE & ACTION RULES
-- Class: Create ONE Page class with methods: __init__, perform_actions, get_result. NO extra methods or testcase-specific logic.
+- Class: Create ONE Page class with methods: __init__, perform_actions, get_result. NO extra methods or testcase-specific logic, UNLESS login is required by PRECONDITION.
+- Precondition (Login): If PRECONDITION indicates a need to log in (e.g., contains 'thành công', 'successfully' or 'success'), you MUST generate a `login(username, password)` method in the Page class. Call this method to perform a successful login before executing the main `perform_actions` of that case. Assume standard locators (e.g., username, password, login button) if not explicitly provided. If there is expected text indicating successful login, add an explicit check/wait for it during the login flow.
 - Locators: Declare directly in __init__. When extracting locator values from the LOCATOR section (which may be in formats like `key=type=value` or `type=value`, e.g., `qmk=id=btn-forget-password`), you MUST intelligently parse it to extract the correct locator type (e.g., `id`) and actual value (e.g., `btn-forget-password`). DO NOT include the key (e.g., `qmk=`) or raw type string (e.g., `id=`) in the final locator value. If Selenium: MUST import `By` (`from selenium.webdriver.common.by import By`) and define locators using `By.ID`, `By.CSS_SELECTOR`, `By.XPATH`, `By.NAME`, etc. as tuples based on the parsed type and value (e.g., `(By.ID, 'btn-forget-password')`). If Playwright: declare locators as simple strings appropriately. Reuse locators. DO NOT use parse_locator().
 - Input: wait visibility -> clear -> send_keys (Selenium) / locator().fill() (Playwright).
 - Click: If locator is img/icon/svg, you MUST ONLY use JS click directly, use presence_of_element_located (DO NOT use normal click). Otherwise, use normal click with JS fallback if it fails.
@@ -81,10 +83,10 @@ If playwright: Use playwright.sync_api, page.locator(), sync_playwright. DO NOT 
     + use page object
     + fully close browser/context after each test
     
-- Reporting: Configure pytest.ini exactly with the following content:
-[pytest]
-addopts = --alluredir=allure-results
-DO NOT create separate report dirs per feature.
+- Reporting:
+  + Create a `pytest.ini` file in the project root if it does not already exist.
+  + Ensure the file contains the configuration needed to automatically generate Allure results in a single shared directory named `allure-results`.
+  + Do not create separate report directories for each feature or test module.
 
 6. CONSTRAINTS
 - No time.sleep().
