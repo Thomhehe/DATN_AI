@@ -16,7 +16,7 @@ def is_valid_output(content: str) -> bool:
         return False
 
     # phải đúng 2 file
-    if content.count("###FILE:") != 2:
+    if content.count("###FILE:") != 4:
         return False
 
     return True
@@ -33,7 +33,7 @@ def generate_code(prompt, max_retries=3):
                     {
                         "role": "system",
                         "content": (
-                            "You are a strict QA Automation Engineer.\n"
+                            "You are a Senior QA Automation Engineer.\n"
                             "Always follow output format EXACTLY.\n"
                             "Only return code.\n"
                             "If format is wrong, response is invalid."
@@ -48,11 +48,10 @@ def generate_code(prompt, max_retries=3):
 
             content = response.choices[0].message.content.strip()
 
-            # ✅ validate format
             if is_valid_output(content):
                 return content
 
-            last_error = "Sai format (không đủ 2 ###FILE)"
+            last_error = "Sai format (không đủ 4 ###FILE)"
 
         except Exception as e:
             last_error = str(e)

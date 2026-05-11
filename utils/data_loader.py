@@ -1,245 +1,164 @@
 import re
-
 import pandas as pd
 
+# =========================
+# 1. UTIL SIMPLE
+# =========================
 
-import string
-
-def extract_expected_value(expected_text):
-    """
-    Chuẩn hóa expected:
-    - Lấy phần trong ngoặc kép "" hoặc ngoặc đơn ''
-    - 1 giá trị → string
-    - nhiều giá trị → list
-    - không có "" hoặc '' → trả về rỗng, KHÔNG lấy cả câu dài
-    """
-    if not expected_text or str(expected_text).lower() == "nan":
-        return ""
-
-    text = str(expected_text).strip()
-
-    matches = [m[0] or m[1] for m in re.findall(r'"([^"]*)"|\'([^\']*)\'', text)]
-
-    if matches:
-        return matches[0] if len(matches) == 1 else matches
-
-    return ""
-
-def extract_feature(tc_id, title=""):
-    tc_id_str = str(tc_id).lower()
-    if "[" in tc_id_str and "-" in tc_id_str:
-        return tc_id_str.split("[")[1].split("-")[0].strip()
-        
-    if title:
-        clean_title = title.translate(str.maketrans('', '', string.punctuation)).strip()
-        if clean_title:
-            words = clean_title.lower().split()
-            if words:
-                return "_".join(words[:2])
-                
-    return tc_id_str.split("-")[0].strip() if "-" in tc_id_str else "test"
-
-
-def normalize_column_name(name):
+def normalize(name):
     if pd.isna(name):
         return ""
     return str(name).strip().lower()
 
-
-def find_column(columns, candidates):
-    for col in columns:
-        name = normalize_column_name(col)
-        if any(candidate in name for candidate in candidates):
-            return col
-    return None
-
-
-def parse_key_value_data(value):
+# Đọc test data
+def parse_key_value(value):
     if pd.isna(value):
-        return {}
-
-    raw = str(value).strip()
-    if not raw:
         return {}
 
     data = {}
-    for item in re.split(r"[\r\n;]+", raw):
+    for item in str(value).splitlines():
         if ":" in item:
-            key, val = item.split(":", 1)
-            key = key.strip()
-            val = val.strip()
-            if key:
-                data[key] = val
+            k, v = item.split(":", 1)
+            data[k.strip()] = v.strip()
     return data
 
 
-def normalize_ref(value):
-    if pd.isna(value):
-        return ""
-    return re.sub(r"[^A-Za-z0-9]", "", str(value)).lower()
+# Đọc sheet
+def read_excel(file):
+    file.seek(0)
+    return pd.read_excel(file, sheet_name=None, engine="openpyxl")
 
+# Đọc sheet test data
+def parse_testdata(df):
+    df.columns = [str(c).strip() for c in df.columns]
 
-def numeric_suffix(value):
-    if pd.isna(value):
-        return ""
-    match = re.search(r"(\d+)$", str(value).strip())
-    return match.group(1) if match else ""
+    id_col = next((c for c in df.columns if "td id" in normalize(c)), None)
+    data_col = next((c for c in df.columns if "data" in normalize(c)), None)
 
+    if not id_col:
+        return {}
 
-def read_excel_sheets(file):
-    try:
-        file.seek(0)
-    except Exception:
-        pass
-        
-    sheets = pd.read_excel(file, sheet_name=None, header=None, engine="openpyxl")
     result = {}
-    
-    for sheet_name, df in sheets.items():
-        if df.empty:
+
+    for _, row in df.iterrows():
+        td_id = row.get(id_col)
+        if pd.isna(td_id):
             continue
-            
-        header_row_idx = 0
-        max_score = -1
-        keywords = {"id", "tc id", "td id", "steps", "procedure", "test case procedure", "expected", "expected result", "expected output", "title", "description", "data", "test data"}
-        
-        for i in range(min(15, len(df))):
-            row_values = [str(x).lower().strip() for x in df.iloc[i].values if pd.notna(x)]
-            score = sum(1 for v in row_values if any(k in v for k in keywords))
-            if score > max_score:
-                max_score = score
-                header_row_idx = i
-                
-        if max_score > 0:
-            df.columns = df.iloc[header_row_idx]
-            df = df[header_row_idx + 1:].reset_index(drop=True)
-        else:
-            df.columns = df.iloc[0]
-            df = df[1:].reset_index(drop=True)
-            
-        result[sheet_name] = df
-        
+
+        td_id = str(td_id).strip()
+
+        data = {}
+        if data_col:
+            data = parse_key_value(row.get(data_col))
+
+        result[td_id] = data
+
     return result
 
 
-def parse_testdata_sheet(df):
+def parse_testcase(df, td_map):
     df.columns = [str(c).strip() for c in df.columns]
-    id_col = find_column(df.columns, ["td id", "test data", "data id", "id"])
-    data_col = find_column(df.columns, ["data", "test data", "value", "input", "data (key: value)"])
-    desc_col = find_column(df.columns, ["description", "desc", "title"])
 
-    if id_col is None:
-        return {}
+    id_col = next((c for c in df.columns if "id" in normalize(c)), None)
+    step_col = next((c for c in df.columns if "step" in normalize(c)), None)
+    expected_col = next((c for c in df.columns if "expected" in normalize(c)), None)
+    td_col = next((c for c in df.columns if "td id" in normalize(c) or "test data" in normalize(c)), None)
+    locator_col = next((c for c in df.columns if "locator" in normalize(c)), None)
 
-    data_by_key = {}
+    if not id_col or not step_col:
+        return {
+            "prompt_testcases": [],
+            "json_testcases": []
+        }
+
+    prompt_cases = []
+    json_cases = []
+
     for _, row in df.iterrows():
-        raw_id = row.get(id_col)
-        if pd.isna(raw_id):
-            continue
 
-        key = normalize_ref(raw_id)
-        if not key:
-            continue
-
-        data = {}
-        if data_col is not None and not pd.isna(row.get(data_col)):
-            data = parse_key_value_data(row.get(data_col))
-
-        extra_cols = [c for c in df.columns if c not in {id_col, data_col, desc_col}]
-        for col in extra_cols:
-            if col and col not in {id_col, desc_col}:
-                val = row.get(col)
-                if not pd.isna(val) and str(val).strip():
-                    col_name = col.strip()
-                    val_str = str(val).strip()
-                    if "expected" in col_name.lower():
-                        data[col_name] = extract_expected_value(val_str)
-                    else:
-                        data[col_name] = val_str
-
-        if not data:
-            continue
-
-        data_by_key.setdefault(key, []).append(data)
-
-    return data_by_key
-
-
-def parse_testcase_sheet(df, data_by_key):
-    df.columns = [str(c).strip() for c in df.columns]
-    id_col = find_column(df.columns, ["id", "tc id"])
-    steps_col = find_column(df.columns, ["test case procedure", "steps", "procedure"])
-    expected_col = find_column(df.columns, ["expected output", "expected", "expected result"])
-    description_col = find_column(df.columns, ["test case description", "description", "desc", "title", "precondition"])
-    data_ref_col = find_column(df.columns, ["test data", "data id", "td id", "data reference", "testdata", "test data ref"])
-
-    if id_col is None or steps_col is None:
-        return []
-
-    testcases = []
-    for _, row in df.iterrows():
         tc_id = row.get(id_col)
+
         if pd.isna(tc_id):
             continue
 
         tc_id = str(tc_id).strip()
-        steps = str(row.get(steps_col)).strip()
-        if not steps or steps.lower() == "nan":
-            continue
 
-        data_ref = None
-        if data_ref_col is not None and not pd.isna(row.get(data_ref_col)):
-            data_ref = str(row.get(data_ref_col)).strip()
+        td_ref = (
+            str(row.get(td_col)).strip()
+            if td_col and not pd.isna(row.get(td_col))
+            else None
+        )
 
-        normalized_ref = normalize_ref(data_ref) if data_ref else normalize_ref(tc_id)
-        found_data = data_by_key.get(normalized_ref)
-        if not found_data:
-            num = numeric_suffix(normalized_ref)
-            if num:
-                for key, value in data_by_key.items():
-                    if numeric_suffix(key) == num:
-                        found_data = value
-                        break
+        data = td_map.get(td_ref, {}) if td_ref else {}
 
-        test_data = found_data or []
-        raw_expected = str(row.get(expected_col)).strip() if expected_col is not None else ""
-        testcases.append({
+        expected = (
+            str(row.get(expected_col)).strip()
+            if expected_col and not pd.isna(row.get(expected_col))
+            else ""
+        )
+
+        expected_for_json = expected
+        if re.search(r'(["\']).*?\1\s+or\s+(["\']).*?\2', expected, re.IGNORECASE):
+            matches = re.findall(r'(["\'])(.*?)\1', expected)
+            if matches:
+                expected_for_json = [m[1] for m in matches]
+
+        # Dữ liệu dùng cho AI sinh code
+        prompt_cases.append({
             "id": tc_id,
-            "feature": extract_feature(tc_id, str(row.get(description_col)).strip() if description_col is not None else ""),
-            "description": str(row.get(description_col)).strip() if description_col is not None else "",
-            "steps": steps,
-            "expected": extract_expected_value(raw_expected),
-            "test_data": test_data,
+            "steps": str(row.get(step_col)).strip(),
+            "locator": (
+                str(row.get(locator_col)).strip()
+                if locator_col and not pd.isna(row.get(locator_col))
+                else ""
+            ),
+            "data": data,
+            "expected": expected
         })
 
-    return testcases
+        # Dữ liệu dùng để sinh file json data-driven
+        json_cases.append({
+            "id": tc_id,
+            **data,
+            "expected": expected_for_json
+        })
 
+    return {
+        "prompt_testcases": prompt_cases,
+        "json_testcases": json_cases
+    }
+# =========================
+# 5. MAIN LOADER
+# =========================
 
 def load_excel(file):
-    sheets = read_excel_sheets(file)
-    if not sheets:
-        return []
+    sheets = read_excel(file)
 
-    if len(sheets) == 1:
-        df = next(iter(sheets.values()))
-        return parse_testcase_sheet(df, {})
+    tc_sheets = {}
+    td_sheets = {}
 
-    testcase_df = None
-    testdata_df = None
-    for _, df in sheets.items():
-        cols = [normalize_column_name(c) for c in df.columns]
-        is_tc = any("step" in c or "procedure" in c for c in cols)
-        is_td = any("td id" in c or "data (key: value)" in c for c in cols)
-        
-        if is_tc:
-            testcase_df = df
-        elif is_td:
-            testdata_df = df
-        elif any("test data" in c for c in cols) and not is_tc:
-            testdata_df = df
+    for name, df in sheets.items():
+        cols = [normalize(c) for c in df.columns]
 
-    if testcase_df is None:
-        testcase_df = next(iter(sheets.values()))
+        if any("step" in c for c in cols):
+            tc_sheets[name] = df
+        elif any("td id" in c or "data" in c for c in cols):
+            td_sheets[name] = df
 
-    data_by_key = parse_testdata_sheet(testdata_df) if testdata_df is not None else {}
-    return parse_testcase_sheet(testcase_df, data_by_key)
+    result = {}
+
+    for tc_name, tc_df in tc_sheets.items():
+
+        # match TD sheet đơn giản theo tên
+        td_df = None
+        for name, df in td_sheets.items():
+            if tc_name.lower() in name.lower():
+                td_df = df
+                break
+
+        td_map = parse_testdata(td_df) if td_df is not None else {}
+        testcases = parse_testcase(tc_df, td_map)
+
+        result[tc_name] = testcases
+
+    return result
