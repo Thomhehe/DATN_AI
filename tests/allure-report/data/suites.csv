@@ -1,8 +1,0 @@
-"DESCRIPTION","DURATION IN MS","NAME","PARENT SUITE","START TIME","STATUS","STOP TIME","SUB SUITE","SUITE","TEST CLASS","TEST METHOD"
-"","14384","test_login_flow[TC-014]","tests","2026-05-01","failed","2026-05-01","","test_successful_login","",""
-"","13317","test_login_flow[TC-002]","tests","2026-05-01","passed","2026-05-01","","test_successful_login","",""
-"","24962","test_login_flow[TC-012]","tests","2026-05-01","passed","2026-05-01","","test_successful_login","",""
-"","14379","test_login_flow[TC-010]","tests","2026-05-01","failed","2026-05-01","","test_successful_login","",""
-"","3964","test_login_flow[TC-001]","tests","2026-05-01","failed","2026-05-01","","test_successful_login","",""
-"","4084","test_login_flow[TC-005]","tests","2026-05-01","passed","2026-05-01","","test_successful_login","",""
-"","14373","test_login_flow[TC-013]","tests","2026-05-01","failed","2026-05-01","","test_successful_login","",""

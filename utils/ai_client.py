@@ -2,27 +2,29 @@ from openai import OpenAI
 import os
 from dotenv import load_dotenv
 
+
 load_dotenv()
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-
-def is_valid_output(content: str) -> bool:
-    """Check AI output đúng format chưa"""
+def is_valid_output(content: str, expected_files: int = 3) -> bool:
+    """
+    Kiểm tra output AI có đúng số lượng ###FILE hay không.
+    expected_files: mặc định là 3 (pages, tests, data)
+    """
     if not content:
         return False
 
     if "###FILE:" not in content:
         return False
 
-    # phải đúng 2 file
-    if content.count("###FILE:") != 4:
-        return False
-
-    return True
+    return content.count("###FILE:") >= expected_files
 
 
-def generate_code(prompt, max_retries=3):
+def generate_code(prompt, expected_files: int = 3, max_retries: int = 3):
+    """
+    expected_files: mặc định là 3 (pages, tests, data)
+    """
     last_error = ""
 
     for attempt in range(max_retries):
@@ -48,10 +50,12 @@ def generate_code(prompt, max_retries=3):
 
             content = response.choices[0].message.content.strip()
 
-            if is_valid_output(content):
+            if is_valid_output(content, expected_files=expected_files):
                 return content
 
-            last_error = "Sai format (không đủ 4 ###FILE)"
+            last_error = (
+                f"Sai format (không đủ {expected_files} ###FILE)"
+            )
 
         except Exception as e:
             last_error = str(e)
