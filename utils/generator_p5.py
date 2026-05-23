@@ -15,13 +15,13 @@ DATA:{tc.get('data', {})}
 EXPECTED:{tc.get('expected', '')}
 """
 
-    if framework.lower() == "selenium":
+    if framework.strip().lower() == "selenium":
         framework_rules = """
 - Use selenium.webdriver, WebDriverWait, expected_conditions, webdriver-manager. Use self.driver. Start maximized.
 - Locators: MUST import `By` (`from selenium.webdriver.common.by import By`) and define locators using `By.ID`, `By.CSS_SELECTOR`, `By.XPATH`, `By.NAME`, etc. as tuples (e.g., `(By.ID, 'btn')`).
 - Action Helpers: To keep code extremely concise, MUST generate `_click(self, locator)` and `_input(self, locator, text)` methods in the Page class.
-  + `_input`: wait visibility -> clear -> send_keys. DO NOT use `scrollIntoView`.
-  + `_click`: MUST handle lazy-loaded/hidden elements. 1. wait `presence_of_element_located`. 2. `execute_script("arguments[0].scrollIntoView({block: 'center'});", el)` to center and avoid sticky headers. 3. `import time; time.sleep(0.5)`. 4. wait `element_to_be_clickable`. 5. try `el.click()` with `execute_script("arguments[0].click();", el)` fallback. Use these helpers in all action methods.
+  + `_input`: wait visibility -> try native `el.click()`, fallback to javascript click if intercepted -> clear -> send_keys. DO NOT use `scrollIntoView`.
+  + `_click`: MUST handle lazy-loaded/hidden elements and StaleElementReferenceException. `for attempt in range(2):` 1. `el_present = wait presence_of_element_located` 2. `execute_script("arguments[0].scrollIntoView({block: 'center'});", el_present)` 3. `import time; time.sleep(0.5)` 4. `el = wait element_to_be_clickable` 5. Check `tag = el.tag_name.lower()`. If tag in ("button", "input"), MUST use js click directly (`execute_script("arguments[0].click();", el)`). Otherwise, try native `el.click()` first, and fallback to js click. Catch `StaleElementReferenceException` (MUST import from `selenium.common.exceptions`) to retry.
 - Dropdown/Select: use `Select(element).select_by_visible_text(value)` (MUST `from selenium.webdriver.support.ui import Select`).
 - Verify/Check Displayed: wait using WebDriverWait with visibility_of_element_located.
 - HTML5 Validation: get_attribute("validationMessage").
@@ -60,8 +60,15 @@ DO NOT use markdown blocks, generate extra files, or change filenames.
 
 3. PAGE & ACTION RULES
 - Class: Create ONE Page class with methods: __init__, action methods, get_result. NO extra methods or testcase-specific logic, UNLESS required by PRECONDITION.
-- Precondition Handling: If a PRECONDITION exists (e.g., 'Login successful' or 'Đăng nhập thành công'), you MUST analyze the provided TEST CASES to find the matching setup case (like a Login case). Extract ALL locators, steps, and data from that setup case to generate a reusable setup method in the Page Object WITHOUT parameters (e.g., `setup_login(self)`). This setup method MUST hardcode or internally use the EXACT valid data from the setup case (e.g., TC-007) so you DO NOT guess data. For the test cases that REQUIRE this precondition (e.g. TC-009), DO NOT add duplicate setup data (like email or password) into their JSON entries. Instead, add a flag `"requires_login": true` to their JSON data. In the test file, write a conditional block to call this setup method ONLY if this flag is present (e.g., `if d.get("requires_login"): page.setup_login()`). DO NOT call this setup method for all test cases.
-- Locators: Declare directly in __init__. When extracting locator values from the LOCATOR section (e.g., `id=btn-forget-password`), intelligently parse it to extract the correct locator type and actual value. DO NOT include the key or raw type string in the final locator value.
+- Precondition Handling: ONLY if a test case requires a LOGIN precondition (e.g., 'Login successful', 'Đăng nhập thành công'), find its matching setup case (the Login test case) and:
+  1. Extract ONLY the locators required to perform the login action (e.g., username/email, password, login button) from its `LOCATOR:` section to `__init__`. STRICTLY EXCLUDE any notification, alert, or error message locators! DO NOT guess or invent locators for the setup method!
+  2. Create a parameterless setup method (e.g., `setup_login(self)`). You MUST use the exact valid credentials provided in the DATA section of the setup case (the Login testcase). DO NOT invent or make up fake data like "valid@example.com", extract the actual data from the setup testcase!
+  3. STRICTLY EXCLUDE this setup case from `data.json` and `perform_actions()`.
+  4. For test cases requiring it, add `"requires_login": true` in `data.json`.
+  5. In test file: `if d.get("requires_login"): page.setup_login()` else `driver.get(url)`.
+  6. `perform_actions()` MUST continue from the setup's final state without reloading the page.
+  7. DO NOT apply this extraction or generate setup methods/flags for non-login preconditions.
+- Locators: Declare directly in __init__. When extracting locator values from the LOCATOR section (e.g., `id=btn-forget-password`), intelligently parse it to extract the correct locator type and actual value. DO NOT include the key or raw type string in the final locator value. **CRITICAL**: If the locator is a `CSS_SELECTOR` and the value provided in the test case looks like a raw class name or a list of classes (e.g., `btn btn-pri` or `custom-logo-link`), you MUST convert it into a valid CSS class selector by adding a leading dot and replacing spaces with dots (e.g., `.btn.btn-pri`, `.custom-logo-link`). Do not leave them as raw strings. Ensure locators for the setup method are also extracted and declared.
 - Action Methods: Reusable, strictly follows test steps. If test cases have DIFFERENT sequences of steps, DO NOT combine them blindly using generic `try...except pass`. Instead, use `if data["id"] in [...]` inside the main `perform_actions` method to execute specific steps ONLY for the test cases that require them (e.g., clicking a banner only for TC-012). This ensures no test case executes redundant steps.
 - Bulk Input Handling: If a step implies filling remaining fields, automatically check the DATA section and generate corresponding inputs if the key exists in data.
 
@@ -70,8 +77,8 @@ DO NOT use markdown blocks, generate extra files, or change filenames.
 - STRICTLY NO DUPLICATED CODE: DO NOT write separate logic for string and list! FIRST normalize: `is_list = isinstance(expected, list); expected_list = expected if is_list else [expected]`. Then write a SINGLE `for exp in expected_list:` loop.
 - INSIDE THE LOOP, generate ONLY the validation checks REQUIRED BY THE TEST CASES:
   + URL Check: ONLY generate `if exp.startswith("http"):` check if at least one test case expects a URL.
-  + HTML5 Validation: ONLY generate `validationMessage` check if a testcase's LOCATOR explicitly specifies "html5".
-  + Explicit Locators: If message locators are defined, check them (`try...except` independent WebDriverWait).
+  + HTML5 Validation: ONLY generate `validationMessage` check if a testcase's LOCATOR explicitly specifies "html5". You MUST ensure it's truly triggered by checking `!el.validity.valid` and `el === document.activeElement`. Then, MUST call `self.driver.execute_script("arguments[0].reportValidity();", el)` to force the browser to visually display the tooltip, then append the message.
+  + Explicit Locators: Collect ONLY the validation locators you actually defined in `__init__` into a list and check them (`try...except` independent WebDriverWait). DO NOT reference attributes (like `self.warning` or `self.error`) if you did not explicitly define them in `__init__`.
   + Body Text Fallback: If a test case lacks a specific message locator (and is NOT an html5 case), ONLY generate a check for `body.text` or `//*[contains(text(), f"{{exp}}")]`. DO NOT generate html5 checks here. DO NOT generate this fallback if all test cases have explicit locators.
   + If alert is expected: check alert.
 - Append found text to a `results` list.
