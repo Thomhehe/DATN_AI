@@ -22,6 +22,63 @@ def parse_key_value(value):
             data[k.strip()] = v.strip()
     return data
 
+def parse_locator_lines(locator_text):
+    if not locator_text:
+        return []
+
+    lines = []
+    for line in str(locator_text).splitlines():
+        line = line.strip()
+        if not line:
+            continue
+
+        if "=" in line:
+            name, value = line.split("=", 1)
+            lines.append({
+                "name": name.strip(),
+                "value": value.strip()
+            })
+
+    return lines
+
+
+def normalize_locators_across_cases(prompt_cases):
+    seen_exact = set()
+    used_names = {}
+
+    for case in prompt_cases:
+        locator_text = case.get("locator", "")
+        locator_lines = parse_locator_lines(locator_text)
+
+        new_lines = []
+
+        for item in locator_lines:
+            name = item["name"]
+            value = item["value"]
+
+            exact_key = (name.lower(), value.lower())
+
+            # Trường hợp 1: trùng cả tên element và locator => bỏ dòng trùng
+            if exact_key in seen_exact:
+                continue
+
+            seen_exact.add(exact_key)
+
+            name_key = name.lower()
+
+            # Trường hợp 2: trùng tên element nhưng locator khác => tự đổi tên
+            if name_key in used_names:
+                used_names[name_key] += 1
+                new_name = f"{name}_{used_names[name_key]}"
+            else:
+                used_names[name_key] = 1
+                new_name = name
+
+            new_lines.append(f"{new_name}={value}")
+
+        case["locator"] = "\n".join(new_lines)
+
+    return prompt_cases
 
 # Đọc sheet
 def read_excel(file):
@@ -131,6 +188,7 @@ def parse_testcase(df, td_map):
             "expected": expected_for_json
         })
 
+    prompt_cases = normalize_locators_across_cases(prompt_cases)
     return {
         "prompt_testcases": prompt_cases,
         "json_testcases": json_cases

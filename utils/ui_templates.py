@@ -554,7 +554,7 @@ def render_zip_instructions():
         align-items: center;
         gap: 8px;
     ">
-        <span>💡 Bạn có thể giải nén file ZIP này và mở trực tiếp bằng PyCharm hoặc VSCode để chạy test ngay lập tức.</span>
+        <span>💡 Bạn có thể giải nén file ZIP này, đọc hướng dẫn trong file <b>README.md</b> để chuẩn bị môi trường và chạy test.</span>
     </div>
     """, unsafe_allow_html=True)
 

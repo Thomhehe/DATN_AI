@@ -54,6 +54,7 @@ with st.sidebar:
         ["selenium", "playwright"]
     )
 
+    # Reserved for future language support
     language = st.selectbox(
         "💻 Ngôn ngữ",
         ["Python"]
@@ -307,8 +308,83 @@ streamlit
 """
             if framework == "selenium":
                 reqs += "selenium\nwebdriver-manager\n"
+                readme_content = """# Automated Test Project
+
+## Framework
+Selenium WebDriver
+
+## Environment
+- Python 3.10+
+- PyCharm
+
+## Setup
+### Create virtual environment
+```bash
+python -m venv .venv
+```
+
+### Activate Windows
+```bash
+.venv\\Scripts\\activate
+```
+
+### Install packages
+```bash
+pip install -r requirements.txt
+```
+
+### Run tests
+```bash
+pytest
+```
+
+### Generate Allure Report
+```bash
+allure serve allure-results
+```
+"""
             else:
                 reqs += "playwright\npytest-playwright\n"
+                readme_content = """# Automated Test Project
+
+## Framework
+Playwright
+
+## Environment
+- Python 3.10+
+- PyCharm
+
+## Setup
+### Create virtual environment
+```bash
+python -m venv .venv
+```
+
+### Activate Windows
+```bash
+.venv\\Scripts\\activate
+```
+
+### Install packages
+```bash
+pip install -r requirements.txt
+```
+
+### Install Browser
+```bash
+playwright install
+```
+
+### Run tests
+```bash
+pytest
+```
+
+### Generate Allure Report
+```bash
+allure serve allure-results
+```
+"""
                 
             pytest_ini = """[pytest]
 pythonpath = .
@@ -318,9 +394,11 @@ addopts = --alluredir=allure-results
                 if len(strategies) == 1:
                     project_files["requirements.txt"] = reqs
                     project_files["pytest.ini"] = pytest_ini
+                    project_files["README.md"] = readme_content
                 else:
                     project_files[f"{s[0].lower()}/requirements.txt"] = reqs
                     project_files[f"{s[0].lower()}/pytest.ini"] = pytest_ini
+                    project_files[f"{s[0].lower()}/README.md"] = readme_content
 
             # Tạo file ZIP trong bộ nhớ đệm BytesIO
             zip_buffer = io.BytesIO()
@@ -338,7 +416,8 @@ addopts = --alluredir=allure-results
             "grand_total_tokens": grand_total_tokens,
             "zip_data": zip_data,
             "zip_name": zip_name,
-            "func_results": func_results
+            "func_results": func_results,
+            "prompt_strategy": s_name
         }
         st.session_state.has_generated = True
         st.rerun()  # Kích hoạt tải lại trang để chuyển sang Case 3 hiển thị workspace kết quả
@@ -418,8 +497,12 @@ elif uploaded_file and st.session_state.has_generated:
             # CỘT BÊN PHẢI
             # =======================
             with col_right:
-                st.markdown("<h4 style='color:#1e3c72; text-align:center; margin-bottom:26px;'>GENERATED SCRIPT</h4>", unsafe_allow_html=True)
-                
+                used_prompt_strategy = active_result.get("prompt_strategy", "")
+
+                st.markdown(
+                    f"<h4 style='color:#1e3c72; text-align:center; margin-bottom:26px;'>GENERATED SCRIPT ({used_prompt_strategy})</h4>",
+                    unsafe_allow_html=True
+                )
                 parsed_files = active_result.get("parsed_files", [])
                 
                 if parsed_files:
