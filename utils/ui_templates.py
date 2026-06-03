@@ -628,6 +628,9 @@ def render_code_block(file_content, height=330):
                 line-height: 1.5 !important;
                 background: transparent !important;
                 padding: 0 !important;
+                
+                font-variant-ligatures: none !important;
+                font-feature-settings: "liga" 0 !important;
             }}
         </style>
     </head>

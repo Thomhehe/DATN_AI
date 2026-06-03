@@ -1,4 +1,3 @@
-# pyrefly: ignore [missing-import]
 import threading
 import time
 
@@ -7,7 +6,6 @@ import re
 import io
 import zipfile
 
-# Nhập các mô-đun chức năng nội bộ trong thư mục utils
 from utils.data_loader import load_excel
 import utils.generator_p4 as gen_p4
 import utils.generator_p5 as gen_p5
@@ -19,12 +17,10 @@ import utils.ui_templates as ui
 import importlib
 importlib.reload(ui)
 
-# Cấu hình thuộc tính của trang Streamlit (Tên tab trình duyệt là "AI Test Generator" và giao diện hiển thị dạng rộng)
+
 st.set_page_config(page_title="AI Test Generator", layout="wide")
 
-# Nhúng các quy tắc định dạng CSS tùy chỉnh được định nghĩa từ mô-đun ui_templates
 ui.render_css()
-
 
 # ==========================================================
 # KHỞI TẠO CÁC BIẾN TRẠNG THÁI HỆ THỐNG (SESSION STATE)
@@ -40,69 +36,67 @@ if "last_uploaded_file_name" not in st.session_state:
     st.session_state.last_uploaded_file_name = None  # Lưu tên file Excel cuối cùng được tải lên để nhận diện đổi file
 
 
-# ==========================================================
-# XÂY DỰNG GIAO DIỆN THANH CẤU HÌNH BÊN TRÁI (SIDEBAR)
-# ==========================================================
+# ==============
+# SIDEBAR
+# ==============
 with st.sidebar:
-    # Hiển thị tiêu đề đầu trang của Sidebar
+
     ui.render_sidebar_header()
     st.markdown("---")
-    
-    # Lựa chọn Chiến lược Prompt để sinh kịch bản kiểm thử (P1 đến P5)
+
     prompt_strategy = st.selectbox(
         "🧠 Chọn chiến lược Prompt",
         ["P5 (Full Automation Prompt)", "P4 (Locator-aware Prompt)", "P3 (Structured Test Case Prompt)", "P2 (Framework - Specific Prompt)", "P1 (Basic Prompt)"]
     )
-    
-    # Lựa chọn Thư viện kiểm thử tự động (Selenium hoặc Playwright)
+
     framework = st.selectbox(
         "⚙️ Chọn framework",
         ["selenium", "playwright"]
     )
-    
-    # Thành phần cho phép người dùng kéo thả file Excel test case lên hệ thống
+
+    language = st.selectbox(
+        "💻 Ngôn ngữ",
+        ["Python"]
+    )
+
     uploaded_file = st.file_uploader("📂 Tải lên file Excel test case", type=["xlsx"])
     
     st.markdown("---")
-    # Hiển thị chân trang của Sidebar
     ui.render_sidebar_footer()
 
 # Khởi tạo các biến cục bộ
 testcases_by_function = {}
 urls = {}
 
-# ==========================================================
+# =========================================
 # XỬ LÝ KHI FILE EXCEL ĐƯỢC TẢI LÊN
-# ==========================================================
+# =========================================
 if uploaded_file:
     # Nếu phát hiện người dùng tải lên một file Excel mới hoàn toàn so với file trước đó
     if st.session_state.last_uploaded_file_name != uploaded_file.name:
         st.session_state.last_uploaded_file_name = uploaded_file.name
-        st.session_state.has_generated = False  # Reset trạng thái sinh code về chưa thực hiện
-        st.session_state.generation_results = {}  # Xóa kết quả sinh code cũ
+        st.session_state.has_generated = False
+        st.session_state.generation_results = {}
 
-    # Gọi hàm nội bộ để phân tích cú pháp dữ liệu từ file Excel
     testcases_by_function = load_excel(uploaded_file)
-    
-    # Lọc bỏ các chức năng không hợp lệ (không chứa cột ID, Steps hoặc sheet trống rỗng)
+
     testcases_by_function = {
         k: v for k, v in testcases_by_function.items() 
         if v and len(v.get("prompt_testcases", [])) > 0
     }
 
-    # Báo lỗi và dừng chương trình nếu file Excel không chứa bất kỳ test case hợp lệ nào
     if not testcases_by_function:
         st.sidebar.error("❌ Không đọc được test case hợp lệ từ file Excel (Thiếu cột ID, Step hoặc không có dữ liệu)")
         st.stop()
 
 
-# ==========================================================
-# KHU VỰC HIỂN THỊ CHÍNH (MAIN AREA RENDERING)
-# ==========================================================
+# ================================
+# KHU VỰC HIỂN THỊ CHÍNH
+# ================================
 
 # TRƯỜNG HỢP 1: Chưa có file Excel nào được tải lên hệ thống
 if not uploaded_file:
-    # Hiển thị banner tiêu đề giới thiệu hệ thống
+
     ui.render_header(
         title="🤖 AI Sinh Kịch Bản Kiểm Thử Tự Động",
         subtitle="Sinh code kiểm thử tự động cực nhanh và chuẩn xác từ file Excel test case của bạn!"
@@ -254,7 +248,7 @@ elif uploaded_file and not st.session_state.has_generated:
                 grand_total_tokens += total_tokens
                 grand_total_time += elapsed
 
-                progress_placeholder.empty()  # Xóa sạch container tiến độ chú mèo sau khi hoàn tất sinh code
+                progress_placeholder.empty()
 
                 # Sử dụng biểu thức chính quy (Regex) để bóc tách các tệp tin trong code trả về của AI dựa trên thẻ ###FILE:
                 matches = re.findall(r"###FILE:(.+?)\n(.*?)(?=###FILE:|$)", code, re.S)
@@ -378,9 +372,9 @@ elif uploaded_file and st.session_state.has_generated:
     st.markdown("---")
 
     # LỰA CHỌN CHỨC NĂNG ĐỂ XEM CHI TIẾT
-    func_names = list(testcases_by_function.keys())
+    func_names = list(func_results.keys())
     if func_names:
-        # Container trống hỗ trợ hiển thị hộp xem Prompt gửi lên đầu cột
+
         prompt_expander_container = st.container()
 
         selected_func = st.selectbox(
@@ -391,24 +385,22 @@ elif uploaded_file and st.session_state.has_generated:
         
         active_tc_data = testcases_by_function[selected_func]
         active_result = func_results.get(selected_func, {})
-        
-        # Hiển thị bộ mở rộng (Expander) giúp xem chi tiết Prompt gửi đi cho AI
+
         if active_result:
             with prompt_expander_container:
                 with st.expander("📜 Xem Prompt Gửi Cho AI"):
                     st.code(active_result.get("prompt", ""))
         
         if active_tc_data and active_result:
-            # Tạo giao diện chia đôi cột song song (Tỉ lệ 50% - 50%)
+
             col_left, col_right = st.columns([1, 1])
             
-            # ==========================================================
-            # CỘT BÊN TRÁI: DỮ LIỆU ĐẦU VÀO (TEST CASE INPUT - KIỂU SỔ GHI CHÉP)
-            # ==========================================================
+            # =========================
+            # DỮ LIỆU ĐẦU VÀO
+            # =========================
             with col_left:
                 st.markdown("<h4 style='color:#1e3c72; text-align:center;'>📝 TEST CASE INPUT</h4>", unsafe_allow_html=True)
-                
-                # Bộ lọc lựa chọn Test Case ID đang cần kiểm tra chi tiết
+
                 tc_list = active_tc_data.get("prompt_testcases", [])
                 tc_ids = [tc.get("id", f"TC_{i+1}") for i, tc in enumerate(tc_list)]
                 
@@ -419,12 +411,12 @@ elif uploaded_file and st.session_state.has_generated:
                 )
                 
                 selected_tc = next((tc for tc in tc_list if tc.get("id") == selected_tc_id), tc_list[0])
-                # Hiển thị thẻ Sổ ghi chép chi tiết của Test Case đang lựa chọn
+                # Hiển thị thẻ Sổ ghi chép chi tiết của Test Case
                 ui.render_notebook_card(selected_tc)
 
-            # ==========================================================
-            # CỘT BÊN PHẢI: MÃ NGUỒN SINH RA (SCRIPT WORKSPACE - TÔNG XANH DƯƠNG)
-            # ==========================================================
+            # =======================
+            # CỘT BÊN PHẢI
+            # =======================
             with col_right:
                 st.markdown("<h4 style='color:#1e3c72; text-align:center; margin-bottom:26px;'>GENERATED SCRIPT</h4>", unsafe_allow_html=True)
                 
@@ -432,11 +424,9 @@ elif uploaded_file and st.session_state.has_generated:
                 
                 if parsed_files:
                     file_names = [f[0].split('/')[-1] for f in parsed_files]
-                    
-                    # Hiển thị thanh tiêu đề macOS đồng bộ màu xanh dương
+
                     ui.render_mac_header("Script Workspace")
-                    
-                    # Khởi tạo tabs tương ứng cho từng file mã nguồn được bóc tách
+
                     tabs = st.tabs([f"📁 {name}" for name in file_names])
                     
                     for idx, tab in enumerate(tabs):
@@ -444,9 +434,7 @@ elif uploaded_file and st.session_state.has_generated:
                             file_name, file_content = parsed_files[idx]
                             # Render code block bằng iframe HTML mượt mà tránh lỗi mất thanh cuộn
                             ui.render_code_block(file_content, height=330)
-                            
-                            # Hiển thị NÚT TẢI RIÊNG cho từng file.
-                            # Nhờ CSS định vị tuyệt đối trong stTabs, nút này được đẩy ra phía dưới viền của Tab Panel một cách hoàn hảo.
+
                             short_name = file_name.split('/')[-1]
                             st.download_button(
                                 label=f"⬇️ Tải {short_name}",
@@ -456,11 +444,9 @@ elif uploaded_file and st.session_state.has_generated:
                                 key=f"dl_{selected_func}_{short_name}_{idx}",
                                 use_container_width=True
                             )
-                    
-                    # Tạo khoảng trống cố định 68px phía dưới stTabs để chứa nút download (cách khung code 15px, cách thông báo/phần tiếp theo 15px)
+
                     st.markdown("<div style='height: 68px;'></div>", unsafe_allow_html=True)
-                    
-                    # Hiển thị thông báo trạng thái ghi lưu file vật lý của hệ thống
+
                     save_msg = active_result.get("save_msg", "")
                     if save_msg:
                         if "❌" in save_msg:
@@ -472,16 +458,16 @@ elif uploaded_file and st.session_state.has_generated:
 
     st.markdown("---")
 
-    # ==========================================================
+    # =================================================
     # KHU VỰC TẢI XUỐNG TOÀN BỘ PROJECT (.ZIP)
-    # ==========================================================
+    # =================================================
     if results.get("zip_data"):
         st.markdown("<h3 style='text-align: center; color: #1e3c72;'>📦 Tải Toàn Bộ Project</h3>", unsafe_allow_html=True)
         # Hiển thị hướng dẫn giải nén
         ui.render_zip_instructions()
         
         st.markdown("<div class='project-dl-wrapper'></div>", unsafe_allow_html=True)
-        # Nút tải file ZIP dự án cấu hình đầy đủ sẵn sàng chạy
+
         st.download_button(
             label="⬇️ Tải File ZIP Toàn Bộ Project (.zip) 🐾",
             data=results.get("zip_data"),
